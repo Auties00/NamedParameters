@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.github.auties00</groupId>
+    <artifactId>named</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>${project.groupId}:${project.artifactId}</name>
+    <description>Named and Optional parameters for Java 17</description>
+    <url>https://github.com/Auties00/NamedParameters</url>
+    <developers>
+        <developer>
+            <name>Alessandro Autiero</name>
+            <email>alautiero@gmail.com</email>
+        </developer>
+    </developers>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>http://www.opensource.org/licenses/mit-license.php</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <scm>
+        <url>https://github.com/Auties00/OptionalDesugarer/tree/master</url>
+        <connection>scm:git:https://github.com/Auties00/OptionalDesugarer.git</connection>
+        <tag>optional-1.0</tag>
+    </scm>
+    <distributionManagement>
+        <snapshotRepository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+        </snapshotRepository>
+        <repository>
+            <id>ossrh</id>
+            <url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+        </repository>
+    </distributionManagement>
+    <profiles>
+        <profile>
+            <id>release-sign-artifacts</id>
+            <activation>
+                <property>
+                    <name>performRelease</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${gpg.plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+    <packaging>jar</packaging>
+
+    <properties>
+        <java.version>17</java.version>
+        <lombok.version>1.18.22</lombok.version>
+        <javac.tester.version>0.19</javac.tester.version>
+        <compiler.plugin.version>3.8.1</compiler.plugin.version>
+        <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
+        <deploy.plugin.version>2.8.2</deploy.plugin.version>
+        <staging.plugin.version>1.6.7</staging.plugin.version>
+        <gpg.plugin.version>3.0.1</gpg.plugin.version>
+        <javac.package>jdk.compiler/com.sun.tools.javac</javac.package>
+        <optional.module>it.auties.named</optional.module>
+        <open.tree>${javac.package}.tree=${optional.module}</open.tree>
+        <open.util>${javac.package}.util=${optional.module}</open.util>
+        <open.code>${javac.package}.code=${optional.module}</open.code>
+        <open.api>${javac.package}.api=${optional.module}</open.api>
+        <open.comp>${javac.package}.comp=${optional.module}</open.comp>
+        <open.jvm>${javac.package}.jvm=${optional.module}</open.jvm>
+        <open.model>${javac.package}.model=${optional.module}</open.model>
+        <open.processing>${javac.package}.processing=${optional.module}</open.processing>
+        <open.resources>${javac.package}.resources=${optional.module}</open.resources>
+        <open.main>${javac.package}.main=${optional.module}</open.main>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${compiler.plugin.version}</version>
+                <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>UTF-8</encoding>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <compilerArgs>
+                        <arg>--add-exports</arg>
+                        <arg>${open.tree}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.util}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.code}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.api}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.comp}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.jvm}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.processing}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.model}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.resources}</arg>
+                        <arg>--add-exports</arg>
+                        <arg>${open.main}</arg>
+                    </compilerArgs>
+                    <fork>true</fork>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${javadoc.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <additionalOptions>
+                        <additionalOption>--add-exports ${open.tree}</additionalOption>
+                        <additionalOption>--add-exports ${open.util}</additionalOption>
+                        <additionalOption>--add-exports ${open.code}</additionalOption>
+                        <additionalOption>--add-exports ${open.api}</additionalOption>
+                        <additionalOption>--add-exports ${open.comp}</additionalOption>
+                        <additionalOption>--add-exports ${open.jvm}</additionalOption>
+                        <additionalOption>--add-exports ${open.processing}</additionalOption>
+                        <additionalOption>--add-exports ${open.model}</additionalOption>
+                        <additionalOption>--add-exports ${open.resources}</additionalOption>
+                        <additionalOption>--add-exports ${open.main}</additionalOption>
+                    </additionalOptions>
+                    <source>17</source>
+                    <failOnError>true</failOnError>
+                    <debug>true</debug>
+                    <verbose>true</verbose>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-deploy-plugin</artifactId>
+                <version>${deploy.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>default-deploy</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>deploy</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.sonatype.plugins</groupId>
+                <artifactId>nexus-staging-maven-plugin</artifactId>
+                <version>${staging.plugin.version}</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <serverId>ossrh</serverId>
+                    <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
+                    <autoReleaseAfterClose>true</autoReleaseAfterClose>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
