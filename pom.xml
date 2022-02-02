@@ -4,7 +4,7 @@
 
     <groupId>com.github.auties00</groupId>
     <artifactId>named</artifactId>
-    <version>1.0</version>
+    <version>1.1-SNAPSHOT</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Named and Optional parameters for Java 17</description>
     <url>https://github.com/Auties00/NamedParameters</url>
