@@ -5,7 +5,6 @@ import com.sun.source.util.Plugin;
 import com.sun.source.util.TaskEvent;
 import com.sun.source.util.TaskListener;
 import com.sun.tools.javac.api.BasicJavacTask;
-import com.sun.tools.javac.code.Symtab;
 import com.sun.tools.javac.comp.*;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
@@ -16,6 +15,7 @@ import it.auties.named.util.Reflection;
 
 import static com.sun.tools.javac.code.Flags.UNATTRIBUTED;
 
+// Main entry point
 public class NamedParameterPlugin implements Plugin, TaskListener {
     private Diagnostics diagnostics;
     private NamedParameterTransformer transformer;
@@ -25,10 +25,12 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
     private MemberEnter memberEnter;
     private Debugger debugger;
 
+    // Opens Javac's packages by bypassing the add opens mechanism
     static{
         Reflection.openJavac();
     }
 
+    // Initializes the local variables of this object
     @Override
     public void init(JavacTask task, String... args) {
         var context = ((BasicJavacTask) task).getContext();
@@ -48,8 +50,13 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
             return;
         }
 
+        // Get the compilation unit currently being scanned
         var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
+
+        // Patch javac bug
         patcher.scan(compilationUnit);
+
+        // Disable javac's attribution error handling
         diagnostics.useCachedHandler();
     }
 
@@ -59,13 +66,21 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
             return;
         }
 
+        // Get the compilation unit currently being scanned
         var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
+
+        // Translate all named invocations inside the unit
         transformer.translate(compilationUnit);
         debugger.debug(() -> System.err.printf("Translated: %n%s%n", compilationUnit));
+
+        // Switch back to javac's error handling
         diagnostics.useJavacHandler();
+
+        // Attribute the unit again
         attribute(compilationUnit);
     }
 
+    // Forces attribution of a compilation unit
     private void attribute(JCCompilationUnit unit){
         unit.getTypeDecls()
                 .stream()
@@ -74,6 +89,7 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
                 .forEach(this::attribute);
     }
 
+    // Forces attribution of class
     private void attribute(JCClassDecl classDeclaration) {
         var env = enterClass(classDeclaration);
         classDeclaration.defs.stream()
@@ -83,6 +99,7 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
                 .forEach(methodEnv -> attr.attrib(methodEnv));
     }
 
+    // Forces attribution of class
     private Env<AttrContext> enterClass(JCClassDecl classDeclaration) {
         var env = enter.getClassEnv(classDeclaration.sym);
         classDeclaration.sym.flags_field = classDeclaration.sym.flags_field | UNATTRIBUTED;
