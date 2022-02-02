@@ -4,7 +4,7 @@
 
     <groupId>com.github.auties00</groupId>
     <artifactId>named</artifactId>
-    <version>1.0</version>
+    <version>1.0-SNAPSHOT</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Named and Optional parameters for Java 17</description>
     <url>https://github.com/Auties00/NamedParameters</url>
@@ -22,8 +22,8 @@
         </license>
     </licenses>
     <scm>
-        <url>https://github.com/Auties00/OptionalDesugarer/tree/master</url>
-        <connection>scm:git:https://github.com/Auties00/OptionalDesugarer.git</connection>
+        <url>https://github.com/Auties00/NamedParameters/tree/master</url>
+        <connection>scm:git:https://github.com/Auties00/NamedParameters.git</connection>
         <tag>named-1.0</tag>
     </scm>
     <distributionManagement>
