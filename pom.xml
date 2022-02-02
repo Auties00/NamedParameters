@@ -22,8 +22,8 @@
         </license>
     </licenses>
     <scm>
-        <url>https://github.com/Auties00/OptionalDesugarer/tree/master</url>
-        <connection>scm:git:https://github.com/Auties00/OptionalDesugarer.git</connection>
+        <url>https://github.com/Auties00/NamedParameters/tree/master</url>
+        <connection>scm:git:https://github.com/Auties00/NamedParameters.git</connection>
         <tag>named-1.0</tag>
     </scm>
     <distributionManagement>
