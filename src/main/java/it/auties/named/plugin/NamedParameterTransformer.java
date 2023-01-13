@@ -1,32 +1,46 @@
 package it.auties.named.plugin;
 
-import com.sun.tools.javac.code.*;
+import static com.sun.tools.javac.tree.TreeInfo.setSymbol;
+import static com.sun.tools.javac.tree.TreeInfo.skipParens;
+import static com.sun.tools.javac.tree.TreeInfo.symbolFor;
+import static com.sun.tools.javac.util.List.nil;
+
+import com.sun.tools.javac.api.JavacTrees;
+import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
+import com.sun.tools.javac.code.Types;
 import com.sun.tools.javac.tree.JCTree;
-import com.sun.tools.javac.tree.JCTree.*;
-import com.sun.tools.javac.tree.TreeMaker;
+import com.sun.tools.javac.tree.JCTree.JCAnnotation;
+import com.sun.tools.javac.tree.JCTree.JCAssign;
+import com.sun.tools.javac.tree.JCTree.JCExpression;
+import com.sun.tools.javac.tree.JCTree.JCIdent;
+import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.tree.JCTree.JCMethodInvocation;
+import com.sun.tools.javac.tree.JCTree.JCNewClass;
+import com.sun.tools.javac.tree.JCTree.JCPolyExpression;
+import com.sun.tools.javac.tree.JCTree.JCVariableDecl;
 import com.sun.tools.javac.tree.TreeTranslator;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.List;
-
-import javax.lang.model.type.TypeKind;
+import it.auties.named.util.Annotations;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.IntStream;
-
-import static com.sun.tools.javac.tree.TreeInfo.*;
+import javax.lang.model.type.TypeKind;
 
 // Handles the translation of all invocations known to Java
 public class NamedParameterTransformer extends TreeTranslator {
-    private final TreeMaker treeMaker;
-    private final Symtab symtab;
+    private static final Map<JCAnnotation, JCExpression> annotations = new HashMap<>();
+
+    private final JavacTrees trees;
     private final Types types;
     public NamedParameterTransformer(Context context){
-        this.treeMaker = TreeMaker.instance(context);
-        this.symtab = Symtab.instance(context);
+        this.trees = JavacTrees.instance(context);
         this.types = Types.instance(context);
     }
 
@@ -53,8 +67,11 @@ public class NamedParameterTransformer extends TreeTranslator {
         var invoked = getSymbol(expression, arguments);
         if(invoked.isEmpty()){
             removeAttributes(expression);
-            return List.nil();
+            return nil();
         }
+
+        // The three of the invoked method
+        var invokedTree = getTree(invoked.orElse(null));
 
         // A mutable list containing the arguments that don't need to be translated and the translated ones
         // A tree map is used to guarantee the order of the parameters
@@ -65,10 +82,12 @@ public class NamedParameterTransformer extends TreeTranslator {
         for (var index = 0; index < limit; index++) {
             // Create a default parameter
             // If any parameter was supplied, it will override the default one
-            var parameter = getOrLast(invoked.get().getParameters(), index);
-            if(hasOptionalModifier(parameter)){
-                var defaultValue = createDefault(parameter.asType());
-                translatedArguments.put(index, defaultValue);
+            if(invokedTree.isPresent()) {
+                var parameter = getOrLast(invokedTree.get().getParameters(), index);
+                var defaultValue = getDefaultValue(parameter);
+                if (defaultValue.isPresent()) {
+                    translatedArguments.put(index, defaultValue.get());
+                }
             }
 
             // Check if the argument is an assignment, required for named parameters
@@ -99,28 +118,19 @@ public class NamedParameterTransformer extends TreeTranslator {
         return translatedArguments.values();
     }
 
-    // Checks whether the parameter has the optional annotation
-    private boolean hasOptionalModifier(VarSymbol parameter) {
-        return parameter.getAnnotation(it.auties.named.annotation.Optional.class) != null;
+    private Optional<JCMethodDecl> getTree(MethodSymbol invoked) {
+        return Optional.ofNullable(invoked)
+                .map(trees::getTree);
     }
 
-    // Creates a default literal for the parameter's type
-    private JCExpression createDefault(Type parameter){
-        if(!parameter.isPrimitive()){
-            return treeMaker.Literal(TypeTag.BOT, null)
-                    .setType(symtab.botType);
-        }
-
-        return switch (parameter.getKind()){
-            case BYTE -> treeMaker.Literal((byte) 0);
-            case CHAR -> treeMaker.Literal((char) 0);
-            case SHORT -> treeMaker.Literal((short) 0);
-            case INT -> treeMaker.Literal(0);
-            case FLOAT -> treeMaker.Literal(0F);
-            case DOUBLE -> treeMaker.Literal(0D);
-            case BOOLEAN -> treeMaker.Literal(false);
-            default -> throw new IllegalArgumentException("Unknown primitive type: %s".formatted(parameter.getKind().name()));
-        };
+    private Optional<JCExpression> getDefaultValue(JCVariableDecl parameter) {
+        return parameter.getModifiers()
+                .getAnnotations()
+                .stream()
+                .map(Annotations::getCachedAnnotation)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst();
     }
 
     // Gets the element at the specified index or the last element in the collection
@@ -137,7 +147,6 @@ public class NamedParameterTransformer extends TreeTranslator {
 
         if(expression instanceof JCMethodInvocation invocation) {
             setSymbol(invocation.meth, methodSymbol);
-            invocation.meth.type = methodSymbol.asType();
             invocation.type = methodSymbol.asType();
             return;
         }
@@ -238,7 +247,7 @@ public class NamedParameterTransformer extends TreeTranslator {
         var argument = getOrLast(arguments, index);
         var parameter = getOrLast(parameters, index);
         return types.isAssignable(argument.type, parameter.type)
-                || hasOptionalModifier(parameter);
+                || Annotations.hasOptionalModifier(parameter);
     }
 
     // Assignments are supported in a method invocation

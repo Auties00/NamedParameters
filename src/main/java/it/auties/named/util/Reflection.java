@@ -1,6 +1,5 @@
 package it.auties.named.util;
 
-import lombok.experimental.UtilityClass;
 import sun.misc.Unsafe;
 
 import java.io.OutputStream;
@@ -9,22 +8,20 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 
-@UtilityClass
 public class Reflection {
-    private final Unsafe unsafe = openUnsafe();
-    private final long offset = findOffset();
+    private static final Unsafe unsafe = openUnsafe();
+    private static final long offset = findOffset();
 
-    public <T extends AccessibleObject> T open(T object){
+    public static <T extends AccessibleObject> void open(T object){
         if(offset != -1){
             unsafe.putBoolean(object, offset, true);
-            return object;
+            return;
         }
 
         object.setAccessible(true);
-        return object;
     }
 
-    public void openJavac(){
+    public static void openJavac(){
         try {
             var jdkCompilerModule = findCompilerModule();
             var addOpensMethod = Module.class.getDeclaredMethod("implAddOpens", String.class, Module.class);
@@ -39,13 +36,13 @@ public class Reflection {
         }
     }
 
-    private Module findCompilerModule() {
+    private static Module findCompilerModule() {
         return ModuleLayer.boot()
                 .findModule("jdk.compiler")
                 .orElseThrow(() -> new ExceptionInInitializerError("Missing module: jdk.compiler"));
     }
 
-    private void invokeAccessibleMethod(Method method, Object caller, Object... arguments){
+    private static void invokeAccessibleMethod(Method method, Object caller, Object... arguments){
         try {
             method.invoke(caller, arguments);
         }catch (Throwable throwable){
@@ -53,7 +50,7 @@ public class Reflection {
         }
     }
 
-    private long findOffset() {
+    private static long findOffset() {
         try {
             var offsetField = AccessibleObject.class.getDeclaredField("override");
             return unsafe.objectFieldOffset(offsetField);
@@ -62,7 +59,7 @@ public class Reflection {
         }
     }
 
-    private long findOffsetFallback() {
+    private static long findOffsetFallback() {
         try {
             return unsafe.objectFieldOffset(AccessibleObjectPlaceholder.class.getDeclaredField("override"));
         }catch (Throwable innerThrowable){
@@ -70,7 +67,7 @@ public class Reflection {
         }
     }
 
-    private Unsafe openUnsafe() {
+    private static Unsafe openUnsafe() {
         try {
             var unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);

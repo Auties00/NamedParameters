@@ -3,13 +3,13 @@ package it.auties.named.plugin;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.Plugin;
 import com.sun.source.util.TaskEvent;
+import com.sun.source.util.TaskEvent.Kind;
 import com.sun.source.util.TaskListener;
 import com.sun.tools.javac.api.BasicJavacTask;
 import com.sun.tools.javac.comp.*;
 import com.sun.tools.javac.tree.JCTree.JCClassDecl;
 import com.sun.tools.javac.tree.JCTree.JCCompilationUnit;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
-import it.auties.named.util.Debugger;
 import it.auties.named.util.Diagnostics;
 import it.auties.named.util.Reflection;
 
@@ -23,7 +23,6 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
     private Attr attr;
     private Enter enter;
     private MemberEnter memberEnter;
-    private Debugger debugger;
 
     // Opens Javac's packages by bypassing the add opens mechanism
     static{
@@ -40,50 +39,51 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
         this.attr = Attr.instance(context);
         this.enter = Enter.instance(context);
         this.memberEnter = MemberEnter.instance(context);
-        this.debugger = new Debugger(args);
         task.addTaskListener(this);
     }
 
     @Override
     public void started(TaskEvent event) {
-        if(event.getKind() != TaskEvent.Kind.ANALYZE){
-            return;
-        }
-
         // Get the compilation unit currently being scanned
         var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
+        switch (event.getKind()) {
+            // Disable javac's attribution error handling
+            case ENTER -> diagnostics.useCachedHandler();
 
-        // Patch javac bug
-        patcher.scan(compilationUnit);
-
-        // Disable javac's attribution error handling
-        diagnostics.useCachedHandler();
+            case ANALYZE -> {
+                // Patch javac bug
+                patcher.scan(compilationUnit);
+                // Disable javac's attribution error handling
+                diagnostics.useCachedHandler();
+            }
+        }
     }
 
     @Override
     public void finished(TaskEvent event) {
-        if(event.getKind() != TaskEvent.Kind.ANALYZE){
-            return;
+        switch (event.getKind()){
+            case ENTER -> diagnostics.useJavacHandler();
+            case ANALYZE -> {
+                // Get the compilation unit currently being scanned
+                var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
+
+                // Translate all named invocations inside the unit
+                transformer.translate(compilationUnit);
+                System.err.printf("Translated: %n%s%n", compilationUnit);
+
+                // Switch back to javac's error handling
+                diagnostics.useJavacHandler();
+
+                // Attribute the unit again
+                attribute(compilationUnit);
+            }
         }
-
-        // Get the compilation unit currently being scanned
-        var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
-
-        // Translate all named invocations inside the unit
-        transformer.translate(compilationUnit);
-        debugger.debug(() -> System.err.printf("Translated: %n%s%n", compilationUnit));
-
-        // Switch back to javac's error handling
-        diagnostics.useJavacHandler();
-
-        // Attribute the unit again
-        attribute(compilationUnit);
     }
 
     // Forces attribution of a compilation unit
     private void attribute(JCCompilationUnit unit){
         unit.getTypeDecls()
-                .stream()
+                 .stream()
                 .filter(declaration -> declaration instanceof JCClassDecl)
                 .map(declaration -> (JCClassDecl) declaration)
                 .forEach(this::attribute);

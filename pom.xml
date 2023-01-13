@@ -69,7 +69,6 @@
 
     <properties>
         <java.version>17</java.version>
-        <lombok.version>1.18.22</lombok.version>
         <javac.tester.version>0.19</javac.tester.version>
         <compiler.plugin.version>3.8.1</compiler.plugin.version>
         <javadoc.plugin.version>3.2.0</javadoc.plugin.version>
@@ -90,15 +89,6 @@
         <open.main>${javac.package}.main=${optional.module}</open.main>
     </properties>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
-            <scope>compile</scope>
-        </dependency>
-    </dependencies>
-
     <build>
         <plugins>
             <plugin>
@@ -109,13 +99,6 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                     <encoding>UTF-8</encoding>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>${lombok.version}</version>
-                        </path>
-                    </annotationProcessorPaths>
                     <compilerArgs>
                         <arg>--add-exports</arg>
                         <arg>${open.tree}</arg>
