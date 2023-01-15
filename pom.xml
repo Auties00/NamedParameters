@@ -4,7 +4,7 @@
 
     <groupId>com.github.auties00</groupId>
     <artifactId>named</artifactId>
-    <version>1.1</version>
+    <version>1.2-SNAPSHOT</version>
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Named and Optional parameters for Java 17</description>
     <url>https://github.com/Auties00/NamedParameters</url>
@@ -24,7 +24,7 @@
     <scm>
         <url>https://github.com/Auties00/NamedParameters/tree/master</url>
         <connection>scm:git:https://github.com/Auties00/NamedParameters.git</connection>
-        <tag>named-1.1</tag>
+        <tag>named-1.0</tag>
     </scm>
     <distributionManagement>
         <snapshotRepository>
