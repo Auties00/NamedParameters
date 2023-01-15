@@ -2,16 +2,18 @@ package it.auties.named.util;
 
 import com.sun.tools.javac.comp.Attr;
 import com.sun.tools.javac.main.JavaCompiler;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.util.Context;
 import com.sun.tools.javac.util.JCDiagnostic;
 import com.sun.tools.javac.util.Log;
+import com.sun.tools.javac.util.Log.DeferredDiagnosticHandler;
 import com.sun.tools.javac.util.Log.DiagnosticHandler;
-
 import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 public class Diagnostics {
     private final Log javacLogger;
@@ -21,27 +23,31 @@ public class Diagnostics {
     private final DiagnosticHandler diagnosticHandler;
 
     private final Field defferedDiagnosticHandlerField;
-    private final DiagnosticHandler deffereDiagnosticHandler;
+    private final DiagnosticHandler deferredDiagnosticHandler;
 
-    private final CachedDiagnosticHandler cachedDiagnosticHandler;
+    private final CustomDeferredDiagnosticHandler customDeferredDiagnosticHandler;
 
     public Diagnostics(Context context) {
         try {
-            Attr attr = Attr.instance(context);
-            this.cachedDiagnosticHandler = new CachedDiagnosticHandler();
-            this.javaCompiler = JavaCompiler.instance(context);
+            var attr = Attr.instance(context);
             var javacLoggerField = attr.getClass()
                 .getDeclaredField("log");
             Reflection.open(javacLoggerField);
             this.javacLogger = (Log) javacLoggerField.get(attr);
+
+            this.javaCompiler = JavaCompiler.instance(context);
+
             this.diagnosticHandlerField =  javacLogger.getClass()
                 .getDeclaredField("diagnosticHandler");
             Reflection.open(diagnosticHandlerField);
             this.diagnosticHandler = (DiagnosticHandler) diagnosticHandlerField.get(javacLogger);
+
             this.defferedDiagnosticHandlerField = javaCompiler.getClass()
                 .getDeclaredField("deferredDiagnosticHandler");
             Reflection.open(defferedDiagnosticHandlerField);
-            this.deffereDiagnosticHandler = (DiagnosticHandler) defferedDiagnosticHandlerField.get(javaCompiler);
+            this.deferredDiagnosticHandler = (DiagnosticHandler) defferedDiagnosticHandlerField.get(javaCompiler);
+
+            this.customDeferredDiagnosticHandler = new CustomDeferredDiagnosticHandler();
         }catch (ReflectiveOperationException exception){
             throw new RuntimeException("Cannot run diagnostics", exception);
         }
@@ -49,8 +55,8 @@ public class Diagnostics {
 
     public void useCachedHandler() {
         try {
-            diagnosticHandlerField.set(javacLogger, cachedDiagnosticHandler);
-            defferedDiagnosticHandlerField.set(javaCompiler, cachedDiagnosticHandler);
+            diagnosticHandlerField.set(javacLogger, customDeferredDiagnosticHandler);
+            defferedDiagnosticHandlerField.set(javaCompiler, customDeferredDiagnosticHandler);
         } catch (IllegalAccessException exception) {
             throw new RuntimeException("Cannot switch to cached handler", exception);
         }
@@ -59,17 +65,27 @@ public class Diagnostics {
     public void useJavacHandler() {
         try {
             diagnosticHandlerField.set(javacLogger, diagnosticHandler);
-            defferedDiagnosticHandlerField.set(javaCompiler, deffereDiagnosticHandler);
+            defferedDiagnosticHandlerField.set(javaCompiler, deferredDiagnosticHandler);
+            customDeferredDiagnosticHandler.reportAll();
         } catch (IllegalAccessException exception) {
             throw new RuntimeException("Cannot switch to javac handler", exception);
         }
     }
 
+    public void markIgnorable(JCTree tree) {
+        customDeferredDiagnosticHandler.cachedErrors()
+            .stream()
+            .filter(entry -> Objects.equals(tree, entry.getDiagnosticPosition().getTree()))
+            .findFirst()
+            .ifPresent(entry -> customDeferredDiagnosticHandler.cachedErrors.put(entry, false));
+    }
 
-    public static class CachedDiagnosticHandler extends DiagnosticHandler {
-        private final Queue<JCDiagnostic> cachedErrors; // Could be useful
-        public CachedDiagnosticHandler() {
-            this.cachedErrors = new LinkedList<>();
+    private class CustomDeferredDiagnosticHandler extends DeferredDiagnosticHandler {
+        private final Map<JCDiagnostic, Boolean> cachedErrors;
+
+        private CustomDeferredDiagnosticHandler() {
+            super(javacLogger);
+            this.cachedErrors = new HashMap<>();
         }
 
         @Override
@@ -78,12 +94,20 @@ public class Diagnostics {
                 return;
             }
 
-            cachedErrors.add(diagnostic);
+            cachedErrors.put(diagnostic, true);
         }
 
-        @SuppressWarnings("unused")
-        public Collection<JCDiagnostic> cachedErrors() {
-            return Collections.unmodifiableCollection(cachedErrors);
+        private Collection<JCDiagnostic> cachedErrors() {
+            return Collections.unmodifiableCollection(cachedErrors.keySet());
+        }
+
+        private void reportAll(){
+            cachedErrors.forEach((key, value) -> {
+                if(value){
+                    diagnosticHandler.report(key);
+                }
+            });
+            cachedErrors.clear();
         }
     }
 }

@@ -7,6 +7,9 @@ import java.lang.annotation.Target;
 
 @Target({ElementType.PARAMETER})
 @Retention(RetentionPolicy.SOURCE)
-public @interface Optional {
-    String value() default "ignored";
+public @interface Option {
+    String NAME = Option.class.getSimpleName();
+    String DEFAULT_VALUE = "<default>";
+
+    String value() default DEFAULT_VALUE;
 }
