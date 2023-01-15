@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 
 public class Diagnostics {
@@ -72,12 +73,12 @@ public class Diagnostics {
         }
     }
 
-    public void markIgnorable(JCTree tree) {
+    public void markResolved(JCTree tree) {
         customDeferredDiagnosticHandler.cachedErrors()
             .stream()
             .filter(entry -> Objects.equals(tree, entry.getDiagnosticPosition().getTree()))
             .findFirst()
-            .ifPresent(entry -> customDeferredDiagnosticHandler.cachedErrors.put(entry, false));
+            .ifPresent(customDeferredDiagnosticHandler::markResolved);
     }
 
     private class CustomDeferredDiagnosticHandler extends DeferredDiagnosticHandler {
@@ -101,12 +102,16 @@ public class Diagnostics {
             return Collections.unmodifiableCollection(cachedErrors.keySet());
         }
 
+        private void markResolved(JCDiagnostic diagnostic) {
+            cachedErrors.put(diagnostic, false);
+        }
+
         private void reportAll(){
-            cachedErrors.forEach((key, value) -> {
-                if(value){
-                    diagnosticHandler.report(key);
-                }
-            });
+            cachedErrors.entrySet()
+                .stream()
+                .filter(Entry::getValue)
+                .map(Entry::getKey)
+                .forEach(diagnosticHandler::report);
             cachedErrors.clear();
         }
     }

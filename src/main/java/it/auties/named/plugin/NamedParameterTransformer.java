@@ -196,7 +196,7 @@ public class NamedParameterTransformer extends TreeTranslator {
 
         namedArguments.stream()
             .map(JCAssign::getVariable)
-            .forEach(diagnostics::markIgnorable);
+            .forEach(diagnostics::markResolved);
         map.remove(name);
         return namedArguments.stream()
             .map(JCAssign::getExpression)
@@ -217,7 +217,7 @@ public class NamedParameterTransformer extends TreeTranslator {
             .findFirst()
             .flatMap(Annotations::getDefaultValue)
             .or(() -> createDefaultValue(parameter));
-        result.ifPresent(diagnostics::markIgnorable);
+        result.ifPresent(diagnostics::markResolved);
         return result;
     }
 
@@ -350,7 +350,7 @@ public class NamedParameterTransformer extends TreeTranslator {
             .iterator();
         MethodSymbol bestMatch = null;
         long bestCounter = -1;
-        while (methods.hasNext()){
+        while (methods.hasNext()){ // This code would be nicer with streams, but less efficient
             var method = (MethodSymbol) methods.next();
             var counter = IntStream.range(0, arguments.size())
                 .filter(index -> isAssignable(arguments, method.getParameters(), index))

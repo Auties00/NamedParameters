@@ -99,6 +99,17 @@
                     <source>${java.version}</source>
                     <target>${java.version}</target>
                     <encoding>UTF-8</encoding>
+                    <!-- This has to be the weirdest bug ever -->
+                    <!-- Without any annotation processors the project will not compile because of a compiler crash -->
+                    <!-- The compiler tries to load it.auties.named.plugin.NamedParameterPlugin as a plugin while compiling it without this -->
+                    <!-- I have no clue why, but well this fixes it -->
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.24</version>
+                        </path>
+                    </annotationProcessorPaths>
                     <compilerArgs>
                         <arg>--add-exports</arg>
                         <arg>${open.tree}</arg>
@@ -121,7 +132,6 @@
                         <arg>--add-exports</arg>
                         <arg>${open.main}</arg>
                     </compilerArgs>
-                    <fork>true</fork>
                 </configuration>
             </plugin>
             <plugin>
