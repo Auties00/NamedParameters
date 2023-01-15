@@ -4,7 +4,8 @@ Named and Optional parameters for Java 17
 ### Abstract 
 
 While working on another project, I found a way to make the Java compiler attribute a compilation unit without reporting issues if the AST is not correct.
-So I thought about some cool use cases and decided to create this project. Both classes and methods are supported.
+So I thought about some cool use cases and decided to create this project. 
+Both classes and methods are supported.
 
 ### How does it work
 
@@ -26,10 +27,7 @@ Thanks to this plugin, you can use the name of the parameter followed by an assi
 sayHello(name="Alessandro",surname="Autiero");
 ```
 
-Considering that, according to the JLS, assignments can be legally used as arguments if an identifier matching the left side of the assignment exists,
-an argument is considered named only if said identifier cannot be resolved in the invocation's scope.
-This is done to preserve backwards compatibility and, for these reason, such calls are considered simply as positional arguments that contain an assignment. 
-In short the parameter "name" in the snippet below is not considered a named parameter in any of the example scenarios.
+According to the JLS, assignments can be legally used as arguments. Here are some examples:
 ```java
 var name = "Mario";
 sayHello(name="Alessandro",surname="Autiero"); // name is not a named parameter as variable name exists
@@ -46,18 +44,45 @@ class Whatever {
     }
 }
 ```
+In these cases, "name" will not be treated as a named parameter to preserve backwards compatibility.
 
-If you want to mark a parameter as Optional, you can do so by applying the @Optional annotation:
+If you want to make a parameter optional, you can do so by applying the @Option annotation:
 ```java
-void sayHello(String name, @Optional String surname){
+void sayHello(String name, @Option String surname){
     System.out.printf("Hello, %s %s%n", name, surname);
 }
 
 sayHello(name="Alessandro");
 ```
 
-As Java doesn't support non-constant values as annotation parameters(or generic constant values for that matter), 
-null or 0 is passed as a parameter depending on whether the type is a primitive or not.
+By default, these are the default values passed to the method if the argument isn't specified:
+
+- Object: null
+- Number(byte, short, char, int, long, float, double): 0
+- Booleans: false
+- Arrays: an empty array(for example new int[0])
+- Var args(for example int...): not handled to preserve JLS implementation
+
+A specific value can also be provided, both constants and dynamic values are accepted:
+```java
+// Constant
+void sayHello(String name, @Option(18) int age){
+    System.out.printf("Hello, %s(age: %s)%n", name, age);
+}
+
+// Dynamic values
+void sayHello(String name, @Option(getDefaultAge(name)) int age){
+    System.out.printf("Hello, %s(age: %s)%n", name, age);
+}
+
+int getDefaultAge(String name){
+    // Some incredible logic
+    return 0;
+}
+
+sayHello(name="Alessandro");
+```
+
 
 ### How to install
 Installing the plugin is pretty easy, all you need to do is add a dependency to your project.
@@ -68,17 +93,17 @@ Installing the plugin is pretty easy, all you need to do is add a dependency to 
     <dependency>
         <groupId>com.github.auties00</groupId>
         <artifactId>named</artifactId>
-        <version>1.0</version>
+        <version>1.1</version>
     </dependency>
 </dependencies>
 ```
 
 #### Gradle
 ```groovy
-implementation 'com.github.auties00:named:1.0'
+implementation 'com.github.auties00:named:1.1'
 ```
 
 #### Gradle Kotlin DSL
 ```groovy
-implementation("com.github.auties00:named:1.0")
+implementation("com.github.auties00:named:1.1")
 ```
