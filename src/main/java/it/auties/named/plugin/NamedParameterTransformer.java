@@ -10,6 +10,7 @@ import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
 import com.sun.tools.javac.code.Symtab;
+import com.sun.tools.javac.code.Type.ArrayType;
 import com.sun.tools.javac.code.TypeTag;
 import com.sun.tools.javac.code.Types;
 import com.sun.tools.javac.tree.JCTree;
@@ -41,34 +42,15 @@ public class NamedParameterTransformer extends TreeTranslator {
     private final JavacTrees trees;
     private final Types types;
     private final Diagnostics diagnostics;
-
-    // Default expressions when creating values for @Option
-    private final JCExpression defaultObjectExpression;
-    private final JCExpression defaultByteExpression;
-    private final JCExpression defaultCharExpression;
-    private final JCExpression defaultShortExpression;
-    private final JCExpression defaultIntExpression;
-    private final JCExpression defaultLongExpression;
-    private final JCExpression defaultFloatExpression;
-    private final JCExpression defaultDoubleExpression;
-    private final JCExpression defaultBooleanExpression;
+    private TreeMaker maker;
+    private Symtab symtab;
 
     public NamedParameterTransformer(Context context, Diagnostics diagnostics){
         this.trees = JavacTrees.instance(context);
         this.types = Types.instance(context);
         this.diagnostics = diagnostics;
-        var maker = TreeMaker.instance(context);
-        var symtab = Symtab.instance(context);
-        this.defaultObjectExpression = maker.Literal(TypeTag.BOT, null)
-            .setType(symtab.botType);
-        this.defaultByteExpression = maker.Literal((byte) 0);
-        this.defaultCharExpression = maker.Literal((char) 0);
-        this.defaultShortExpression = maker.Literal((short) 0);
-        this.defaultIntExpression = maker.Literal(0);
-        this.defaultLongExpression = maker.Literal(0L);
-        this.defaultFloatExpression = maker.Literal(0.0F);
-        this.defaultDoubleExpression = maker.Literal(0.0D);
-        this.defaultBooleanExpression = maker.Literal(false);
+        this.maker = TreeMaker.instance(context);
+        this.symtab = Symtab.instance(context);
     }
 
     // Handles methods' invocations
@@ -161,12 +143,21 @@ public class NamedParameterTransformer extends TreeTranslator {
             // If the parameter has var args, use the bit set to determine what should be done first
             // If the parameter has var args, the default value isn't needed as it's provided by Javac automatically
             if(hasVarArgs(parameter)) {
+                var oldSize = results.size();
                 if(orderBitSet.get(index)){
                     results.addAll(getNamedArguments(namedArgumentName, namedArgsMap));
                     positionalArgsIterator.forEachRemaining(results::add);
+                    if(oldSize == results.size()){
+                        var defaultValue = getDefaultValue(parameter);
+                        defaultValue.ifPresent(results::add);
+                    }
                 }else {
                     positionalArgsIterator.forEachRemaining(results::add);
                     results.addAll(getNamedArguments(namedArgumentName, namedArgsMap));
+                    if(oldSize == results.size()){
+                        var defaultValue = getDefaultValue(parameter);
+                        defaultValue.ifPresent(results::add);
+                    }
                 }
             } else {
                 var namedArguments = getNamedArguments(namedArgumentName, namedArgsMap);
@@ -219,36 +210,48 @@ public class NamedParameterTransformer extends TreeTranslator {
 
     // Gets the default value from the @Option annotation or creates it
     private Optional<JCExpression> getDefaultValue(JCVariableDecl parameter) {
-        return parameter.getModifiers()
+        var result = parameter.getModifiers()
             .getAnnotations()
             .stream()
             .filter(Annotations::isOption)
-            .map(annotation -> Annotations.getDefaultValue(annotation)
-                .orElseGet(() -> createDefaultValue(parameter)))
-            .peek(diagnostics::markIgnorable)
-            .findFirst();
+            .findFirst()
+            .flatMap(Annotations::getDefaultValue)
+            .or(() -> createDefaultValue(parameter));
+        result.ifPresent(diagnostics::markIgnorable);
+        return result;
     }
 
     // Creates the correct default value if none was specified
-    private JCExpression createDefaultValue(JCVariableDecl parameter) {
+    private Optional<JCExpression> createDefaultValue(JCVariableDecl parameter) {
         var type = parameter.sym.asType();
-        if(!type.isPrimitive() || type.isErroneous()){
-            return defaultObjectExpression;
+        if(hasVarArgs(parameter)){
+            return Optional.empty();
         }
 
-        return switch (type.getKind()) {
-            case BYTE -> defaultByteExpression;
-            case CHAR -> defaultCharExpression;
-            case SHORT -> defaultShortExpression;
-            case INT -> defaultIntExpression;
-            case LONG -> defaultLongExpression;
-            case FLOAT -> defaultFloatExpression;
-            case DOUBLE -> defaultDoubleExpression;
-            case BOOLEAN -> defaultBooleanExpression;
-            case ARRAY -> defaultObjectExpression;
+        if(type instanceof ArrayType arrayType){
+            var arrayComponent = maker.Type(arrayType.getComponentType());
+            var dimensions = maker.Literal(0);
+            var newArray = maker.NewArray(arrayComponent, List.of(dimensions), null);
+            return Optional.of(newArray);
+        }
+
+        if(!type.isPrimitive() || type.isErroneous()){
+            return Optional.of(maker.Literal(TypeTag.BOT, null)
+                .setType(symtab.botType));
+        }
+
+        return Optional.of(switch (type.getKind()) {
+            case BYTE -> maker.Literal((byte) 0);
+            case CHAR -> maker.Literal((char) 0);
+            case SHORT -> maker.Literal((short) 0);
+            case INT -> maker.Literal(0);
+            case LONG -> maker.Literal(0L);
+            case FLOAT -> maker.Literal(0.0F);
+            case DOUBLE -> maker.Literal(0.0D);
+            case BOOLEAN -> maker.Literal(false);
             default -> throw new IllegalArgumentException(
                 "Unknown primitive type: %s".formatted(type.getKind().name()));
-        };
+        });
     }
 
     // Attributes the provided invocation using the provided symbol
