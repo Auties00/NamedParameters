@@ -6,7 +6,6 @@ import static com.sun.tools.javac.tree.TreeInfo.symbolFor;
 
 import com.sun.tools.javac.api.JavacTrees;
 import com.sun.tools.javac.code.Flags;
-import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.code.Symbol.ClassSymbol;
 import com.sun.tools.javac.code.Symbol.MethodSymbol;
 import com.sun.tools.javac.code.Symbol.VarSymbol;
@@ -53,10 +52,6 @@ public class NamedParameterTransformer extends TreeTranslator {
     private final JCExpression defaultFloatExpression;
     private final JCExpression defaultDoubleExpression;
     private final JCExpression defaultBooleanExpression;
-
-    // This map is used as fast access to the expressions associated with a parameter name
-    // A collection is used because of varargs
-    private Map<String, Collection<JCAssign>> namedArgsMap;
 
     public NamedParameterTransformer(Context context, Diagnostics diagnostics){
         this.trees = JavacTrees.instance(context);
@@ -109,8 +104,9 @@ public class NamedParameterTransformer extends TreeTranslator {
             return arguments;
         }
 
-        // Initialize the map again
-        this.namedArgsMap = new HashMap<>();
+        // This map is used as fast access to the expressions associated with a parameter name
+        // A collection is used because of varargs
+        var namedArgsMap = new HashMap<String, Collection<JCAssign>>();
 
         // This bit set is used to determine if the named argument should be parsed before the positional argument or vice versa
         // This is important because if the method call looks something like:
@@ -166,14 +162,14 @@ public class NamedParameterTransformer extends TreeTranslator {
             // If the parameter has var args, the default value isn't needed as it's provided by Javac automatically
             if(hasVarArgs(parameter)) {
                 if(orderBitSet.get(index)){
-                    results.addAll(getNamedArguments(namedArgumentName));
+                    results.addAll(getNamedArguments(namedArgumentName, namedArgsMap));
                     positionalArgsIterator.forEachRemaining(results::add);
                 }else {
                     positionalArgsIterator.forEachRemaining(results::add);
-                    results.addAll(getNamedArguments(namedArgumentName));
+                    results.addAll(getNamedArguments(namedArgumentName, namedArgsMap));
                 }
             } else {
-                var namedArguments = getNamedArguments(namedArgumentName);
+                var namedArguments = getNamedArguments(namedArgumentName, namedArgsMap);
                 if(!namedArguments.isEmpty()) {
                     results.addAll(namedArguments);
                 }else if (positionalArgsIterator.hasNext()) {
@@ -201,8 +197,8 @@ public class NamedParameterTransformer extends TreeTranslator {
         return results;
     }
 
-    private Collection<JCExpression> getNamedArguments(String name) {
-        var namedArguments = namedArgsMap.get(name);
+    private Collection<JCExpression> getNamedArguments(String name, Map<String, Collection<JCAssign>> map) {
+        var namedArguments = map.get(name);
         if (namedArguments == null) {
             return List.nil();
         }
@@ -210,7 +206,7 @@ public class NamedParameterTransformer extends TreeTranslator {
         namedArguments.stream()
             .map(JCAssign::getVariable)
             .forEach(diagnostics::markIgnorable);
-        namedArgsMap.remove(name);
+        map.remove(name);
         return namedArguments.stream()
             .map(JCAssign::getExpression)
             .toList();
@@ -226,9 +222,10 @@ public class NamedParameterTransformer extends TreeTranslator {
         return parameter.getModifiers()
             .getAnnotations()
             .stream()
-            .filter(Annotations::hasOptionalModifier)
+            .filter(Annotations::isOption)
             .map(annotation -> Annotations.getDefaultValue(annotation)
                 .orElseGet(() -> createDefaultValue(parameter)))
+            .peek(diagnostics::markIgnorable)
             .findFirst();
     }
 
@@ -325,40 +322,47 @@ public class NamedParameterTransformer extends TreeTranslator {
         if(symbol instanceof ClassSymbol classSymbol) {
             // Search for the correct method symbol using non-optional parameters
             var methodSymbol = getProbableSymbol(arguments, classSymbol);
+            if(methodSymbol.isEmpty()){
+                return Optional.empty();
+            }
 
             // Attribute and return the possible result
-            attribute(expression, methodSymbol);
+            attribute(expression, methodSymbol.get());
 
             // Return it
-            return Optional.ofNullable(methodSymbol);
+            return methodSymbol;
         }
 
-        // Otherwise, return empty(undefined behaviour)
+        // Otherwise, return empty
         return Optional.empty();
     }
 
     // Tries to infer the method symbol from an erroneous one
-    private MethodSymbol getProbableSymbol(List<JCExpression> arguments, ClassSymbol classSymbol) {
-        var methodSymbol = (MethodSymbol) classSymbol.enclClass()
-                .members()
-                .findFirst(classSymbol.getSimpleName(), candidate -> isAssignable(candidate, arguments));
-        if(methodSymbol != null){
-            return methodSymbol;
-        }
-
-        return (MethodSymbol) classSymbol.enclClass()
+    // If a perfect match is found, it will be returned instantly
+    // Otherwise the closest will be chosen
+    private Optional<MethodSymbol> getProbableSymbol(List<JCExpression> arguments, ClassSymbol classSymbol) {
+        var methods = classSymbol.enclClass()
             .members()
-            .findFirst(classSymbol.getSimpleName());
-    }
+            .getSymbolsByName(classSymbol.getSimpleName(), symbol -> symbol instanceof MethodSymbol)
+            .iterator();
+        MethodSymbol bestMatch = null;
+        long bestCounter = -1;
+        while (methods.hasNext()){
+            var method = (MethodSymbol) methods.next();
+            var counter = IntStream.range(0, arguments.size())
+                .filter(index -> isAssignable(arguments, method.getParameters(), index))
+                .count();
+            if(counter > bestCounter){
+                bestMatch = method;
+                bestCounter = counter;
+            }
 
-    // Checks if a symbol is assignable to a list of arguments
-    private boolean isAssignable(Symbol candidate, List<JCExpression> arguments) {
-        if (!(candidate instanceof MethodSymbol methodCandidate)) {
-            return false;
+            if(bestCounter == arguments.size() - 1){
+                break;
+            }
         }
 
-        return IntStream.range(0, arguments.size())
-                .allMatch(index -> isAssignable(arguments, methodCandidate.getParameters(), index));
+        return Optional.ofNullable(bestMatch);
     }
 
     // Check if an argument is assignable to a parameter fetching both from a specified collection using the provided index

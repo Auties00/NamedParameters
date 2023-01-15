@@ -57,7 +57,7 @@ public class NamedParameterPlugin implements Plugin, TaskListener {
         var compilationUnit = (JCCompilationUnit) event.getCompilationUnit();
 
         // Add placeholder types to prepare for scan
-        prepareTypesScanner.scan(compilationUnit, null);
+        prepareTypesScanner.scan(compilationUnit);
 
         // Disable javac's attribution error handling
         diagnostics.useCachedHandler();

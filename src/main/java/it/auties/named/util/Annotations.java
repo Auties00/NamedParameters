@@ -22,14 +22,15 @@ public class Annotations {
       return Optional.of(cached);
     }
 
-    if(!hasOptionalModifier(annotation)
+    if(!isOption(annotation)
         || annotation.getArguments() == null
         || annotation.getArguments().isEmpty()){
       return Optional.empty();
     }
 
     var argument = annotation.getArguments().head;
-    var value = argument instanceof JCTree.JCAssign assignment ? assignment.getExpression() : argument;
+    var value = argument instanceof JCTree.JCAssign assignment
+        ? assignment.getExpression() : argument;
     if(TreeInfo.skipParens(value) instanceof JCLiteral literal
         && literal.getValue() == Option.DEFAULT_VALUE){
       return Optional.empty();
@@ -37,10 +38,10 @@ public class Annotations {
 
     annotations.put(annotation, value);
     annotation.args = nil();
-    return Optional.of(annotation);
+    return Optional.of(value);
   }
 
-  public static boolean hasOptionalModifier(JCAnnotation annotation) {
+  public static boolean isOption(JCAnnotation annotation) {
     return TreeInfo.name(annotation.getAnnotationType())
         .contentEquals(Option.class.getSimpleName());
   }
